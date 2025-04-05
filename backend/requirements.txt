@@ -1,0 +1,9 @@
+Flask
+groq
+python-dotenv
+flask-cors
+google-generativeai
+web3
+
+
+

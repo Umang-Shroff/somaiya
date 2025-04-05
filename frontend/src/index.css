@@ -1,0 +1,41 @@
+/* index.css */
+@import "tailwindcss";
+
+
+/* Set global background color */
+body {
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  background-color: none; /* Dark background for the body */
+}
+
+/* Custom Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 12px;  /* Keep the width for better visibility */
+  height: 16px; /* Keep the height for better visibility */
+}
+
+::-webkit-scrollbar-track {
+  background: #1f1f1f;  /* Dark background for the track */
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #777777;  /* Lighter thumb color (more visible but not too light) */
+  border-radius: 10px;
+  border: 3px solid #1f1f1f;  /* Border to separate the thumb from the track */
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #999999;  /* Slightly lighter on hover to indicate interactivity */
+}
+
+::-webkit-scrollbar-button {
+  display: none;  /* Hides the arrows (optional) */
+}
+
+::-webkit-scrollbar-corner {
+  background: #1f1f1f;  /* Corner where horizontal and vertical scrollbars meet */
+}
+
