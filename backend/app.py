@@ -5,6 +5,7 @@ from flask_cors import CORS
 from groq import Groq
 from dotenv import load_dotenv
 import google.generativeai as genai
+import base64
 
 # Load environment variables from .env file
 load_dotenv()
@@ -22,79 +23,60 @@ app = Flask(__name__)
 # Enable CORS for all routes
 CORS(app)
 
-@app.route('/api/whisper-transcribe', methods=['POST'])
-def transcribe_audio():
+@app.route('/insights', methods=['POST'])
+def analyze_image_and_text():
     try:
-        # Check if a file is provided in the request
-        if 'file' not in request.files:
-            return jsonify({'error': 'No file part'}), 400
+        # Check if both 'image' and 'message' are provided in the request
+        if 'image' not in request.files or 'message' not in request.form:
+            return jsonify({'error': 'No image or message part'}), 400
+
+        # Get the image and text from the request
+        image_file = request.files['image']
+        message = request.form['message']
+
+        if image_file.filename == '':
+            return jsonify({'error': 'No selected image'}), 400
+
+        # Convert image to base64 for sending to Gemini
+        image_data = image_file.read()
+        image_base64 = base64.b64encode(image_data).decode('utf-8')  # Encode the image as base64 string
+
+        # Prepare the prompt for Gemini with the text and image data
+        prompt = f"""
+        Analyze the following text and image. The image is base64 encoded. The task is to categorize the text and image into one of the following labels:
         
-        # Get the file from the request
-        file = request.files['file']
-
-        # Read the file as bytes, and reset the cursor position
-        file_data = file.read()  # Read the file as bytes
-        file.seek(0)  # Reset file cursor to the beginning for further use
+        - **Dashboard**: Related to dashboard, settings, UI.
+        - **Login**: Related to login, authentication, username/password.
+        - **Signup**: Related to user registration, account creation.
+        - **Home**: Related to home, landing page, or homepage.
+        - **Insights, Kanban, Social, FAQ**: Specific keywords that should be categorized as such.
+        - **None**: If no categories apply, return "None".
         
-        print(f"Received file with size: {len(file_data)} bytes")
+        Text: {message}
         
-        if file.filename == '':
-            return jsonify({'error': 'No selected file'}), 400
+        Image (Base64 encoded): {image_base64}
+        
+        Return the category that best represents the text and image (dashboard, login, signup, home, insights, kanban, social, faq, or none):
+        """
 
-        # Using the Groq client for transcription
-        transcription = client.audio.transcriptions.create(
-            file=('audio.wav', file_data),  # Send the audio data as bytes
-            model="whisper-large-v3-turbo",  # Model used for transcription
-            prompt="Specify context or spelling",  # Optional: Set a custom prompt if needed
-            response_format="verbose_json",  # Set the response format
-            timestamp_granularities=["word", "segment"],  # Optional: Set timestamp granularity (word and/or segment)
-            language="en",  # Optional: Language code for transcription
-            temperature=0.0  # Optional: Control randomness of the output
-        )
-
-        # Ensure we log only the current transcription text
-        transcription_text = transcription.text
-        print("Latest Transcription:", transcription_text)
-
-        # Now, send the transcription to Gemini for processing
-        gemini_response = send_to_gemini(transcription_text)
+        # Send the prompt to Gemini for processing
+        gemini_response = send_to_gemini(prompt)
         print("Gemini Response:", gemini_response)
-        # Return the Gemini response to the frontend
+
+        # Return the response to the frontend
         return jsonify({'gemini_response': gemini_response})
 
     except Exception as e:
-        print(f"Error processing the audio: {e}")
+        print(f"Error processing the request: {e}")
         return jsonify({'error': str(e)}), 500
 
 
-def send_to_gemini(transcription_text):
-    """Function to send transcription text to Gemini LLM with a prompt."""
-    # Prepare the prompt for Gemini (you can customize this part)
-    prompt = f"""
-    You are a text analyzer. The task is to analyze the provided text and categorize it based on the following labels:
-    
-    - **Dashboard**: If the text refers to anything related to the dashboard, such as "Dashboard", "overview", "control panel", "settings", "user interface", etc., return "Dashboard".
-    - **Login**: If the text refers to anything related to logging in, such as "Login", "Sign In", "authentication", "username", "password", "login page", "signin", etc., return "Login".
-    - **Signup**: If the text refers to anything related to user sign-up or account creation, such as "Signup", "register", "sign up", "create account", etc., return "Signup".
-    - **Home**: If the text refers to anything related to the homepage, landing page, or general entry point of a website, such as "Home", "Landing", "welcome page", "homepage", etc., return "Home".
-    
-    NOTE: If the text refers to anything related to the following : [Insights, Kanban, Social, FAQ], anything close to these options in given then ONLY return back the words
-    "Insights", "Kanban", "Social", "FAQ" respectively and nothing else.
-    If nothing is matching any of the above categories, return "None" Only.
-    
-    Please review the following text and based on the context or keywords, return only the word representing the category (dashboard, login, signup, or home). Do not return anything else.
-    
-    Text:
-    {transcription_text}
-    
-    Return the category (dashboard, login, signup, or home) OR (insights, kanban, social, faq) only, without any additional text or explanation.:
-    """
-
-
+def send_to_gemini(prompt):
+    """Function to send the prompt to Gemini LLM for processing."""
     try:
-        # Use the gemini-1.5-flash model for generating content from transcription text
+        # Use the gemini-1.5-flash model for generating content
         model = genai.GenerativeModel('gemini-1.5-flash')
-        response = model.generate_content([transcription_text, prompt])
+        response = model.generate_content([prompt])
 
         # Return the text from the Gemini response
         return response.text
